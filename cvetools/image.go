@@ -25,6 +25,7 @@ import (
 	"github.com/neuvector/neuvector/share/scan/registry"
 	"github.com/neuvector/neuvector/share/scan/secrets"
 	"github.com/neuvector/neuvector/share/utils"
+	"github.com/coreos/clair/pkg/tarutil"
 )
 
 const (
@@ -334,13 +335,8 @@ func getImageLayers(tmpDir string, imageTar string) ([]string, map[string]string
 	defer reader.Close()
 
 	//get the manifest from the image tar
-	files, _ := utils.SelectivelyExtractArchive(bufio.NewReader(reader), func(filename string) bool {
-		if filename == manifestJson || strings.HasSuffix(filename, layerJson) || filename == ociLayout {
-			return true
-		} else {
-			return false
-		}
-	}, maxFileSize)
+	filenames := []string{manifestJson, layerJson, ociLayout}
+	files, _ := tarutil.ExtractFiles(bufio.NewReader(reader), filenames)
 
 	// https://github.com/opencontainers/image-spec/blob/main/image-layout.md
 	// Optional: Following the index.json to find a manifest
@@ -447,7 +443,7 @@ func getImageLayerIterate(
 			size = info.Size
 		}
 
-		pathMap, err := selectiveFilesFromPath(layerPath, maxFileSize, func(path, fullpath string) bool {
+		pathMap, err := selectiveFilesFromPath(layerPath, func(path, fullpath string) bool {
 			if scan.OSPkgFiles.Contains(path) || scan.IsAppsPkgFile(path, fullpath) {
 				return true
 			}
@@ -621,7 +617,7 @@ func downloadLayers(ctx context.Context, layers []string, sizes map[string]int64
 							break
 						}
 
-						size, err = utils.ExtractAllArchive(layerPath, rd.(io.ReadCloser), -1)
+						size, err = utils.ExtractAllArchive(layerPath, rd.(io.ReadCloser))
 						if err != nil {
 							log.WithFields(log.Fields{"error": err, "path": layerPath}).Error("Failed to unzip image")
 							os.RemoveAll(layerPath)
@@ -648,7 +644,7 @@ func downloadLayers(ctx context.Context, layers []string, sizes map[string]int64
 
 // selectiveFilesFromPath the specified files and folders
 // store them in a map indexed by file paths
-func selectiveFilesFromPath(rootPath string, maxFileSize int64, selected func(string, string) bool) (map[string]string, error) {
+func selectiveFilesFromPath(rootPath string, selected func(string, string) bool) (map[string]string, error) {
 	rootLen := len(filepath.Clean(rootPath))
 	data := make(map[string]string)
 
@@ -660,7 +656,7 @@ func selectiveFilesFromPath(rootPath string, maxFileSize int64, selected func(st
 		}
 
 		if !info.IsDir() {
-			if info.Mode().IsRegular() && (maxFileSize > 0 && info.Size() < maxFileSize) {
+			if info.Mode().IsRegular() && (info.Size() < tarutil.MaxExtractableFileSize) {
 				inpath := path[(rootLen + 1):] // remove the root "/"
 				if selected(inpath, path) {
 					data[inpath] = path

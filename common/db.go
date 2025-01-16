@@ -721,7 +721,7 @@ func unzipDb(path, desPath string, encryptKey []byte) error {
 	}
 
 	tarFile := bytes.NewReader(plainData)
-	err = utils.ExtractAllArchiveToFiles(desPath, tarFile, maxExtractSize, nil)
+	err = utils.ExtractAllArchiveToFiles(desPath, tarFile, nil)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Extract db file error")
 		return err

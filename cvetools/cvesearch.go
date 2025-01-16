@@ -28,7 +28,6 @@ import (
 )
 
 const (
-	maxFileSize     = 300 * 1024 * 1024
 	contentManifest = "root/buildinfo/content_manifests"
 )
 
@@ -144,7 +143,7 @@ func (cv *ScanTools) ScanImageData(data *share.ScanData) (*share.ScanResult, err
 
 	pkgs, err := utils.SelectivelyExtractArchive(bytes.NewReader(data.Buffer), func(filename string) bool {
 		return true
-	}, maxFileSize)
+	})
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("read file error")
 		return result, err
